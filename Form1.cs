@@ -89,7 +89,7 @@ namespace FileCompare
         {
             try
             {
-                // 왼쪽 -> 오른쪽으로 선택한 파일 복사
+                // 왼쪽 -> 오른쪽으로 선택한 파일/폴더 복사
                 if (string.IsNullOrWhiteSpace(txtLeftDir.Text) || !Directory.Exists(txtLeftDir.Text))
                 {
                     MessageBox.Show(this, "왼쪽 폴더가 선택되어 있지 않습니다.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -104,7 +104,7 @@ namespace FileCompare
                 var selected = lvwLeftDir.SelectedItems;
                 if (selected.Count == 0)
                 {
-                    MessageBox.Show(this, "복사할 파일을 선택하세요.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(this, "복사할 항목을 선택하세요.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
@@ -113,36 +113,63 @@ namespace FileCompare
                 foreach (ListViewItem it in selected)
                 {
                     string name = it.Text;
-                    // 디렉터리 항목이면 건너뜀 (디렉터리 복사는 미지원)
+                    string srcPath = Path.Combine(txtLeftDir.Text, name);
+                    string dstPath = Path.Combine(txtRightDir.Text, name);
+
+                    // 디렉터리(하위폴더)를 하나의 항목처럼 처리
                     if (it.SubItems.Count > 1 && it.SubItems[1].Text == "<DIR>")
                     {
-                        skippedDir++;
-                        continue;
-                    }
-
-                    string src = Path.Combine(txtLeftDir.Text, name);
-                    string dst = Path.Combine(txtRightDir.Text, name);
-
-                    try
-                    {
-                        // 대상 파일이 존재하고 대상이 더 최신인 경우 사용자에게 확인
-                        if (File.Exists(dst))
+                        // 대상 디렉터리가 존재하고 대상이 더 최신이면 사용자 확인 (폴더 단위로 묶음 처리)
+                        if (Directory.Exists(dstPath))
                         {
-                            var sInfo = new FileInfo(src);
-                            var dInfo = new FileInfo(dst);
-                            if (dInfo.LastWriteTime > sInfo.LastWriteTime)
+                            var sDir = new DirectoryInfo(srcPath);
+                            var dDir = new DirectoryInfo(dstPath);
+                            if (dDir.LastWriteTime > sDir.LastWriteTime)
                             {
-                                string msg = "대상에 동일한 이름의 파일이 이미 있습니다.\r\n대상 파일이 더 신규 파일입니다. 덮어쓰시겠습니까?\r\n\r\n원본: " + src + "\r\n대상: " + dst;
+                                string msg = "대상에 동일한 이름의 파일이 이미 있습니다.\r\n대상 파일이 더 신규 파일입니다. 덮어쓰시겠습니까?\r\n\r\n원본: " + srcPath + "\r\n대상: " + dstPath;
                                 var dr = MessageBox.Show(this, msg, "덮어쓰기 확인", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                                 if (dr != DialogResult.Yes)
                                 {
-                                    // 덮어쓰지 않음 -> 건너뜀
-                                    continue;
+                                    skippedDir++;
+                                    continue; // 건너뜀
                                 }
                             }
                         }
 
-                        File.Copy(src, dst, true); // 덮어쓰기 허용
+                        try
+                        {
+                            // 재귀 복사 (하위 폴더와 파일 포함), 기존 파일 덮어쓰기
+                            CopyDirectoryRecursive(srcPath, dstPath);
+                            copied++; // 디렉터리 단위로 카운트
+                        }
+                        catch (Exception exDir)
+                        {
+                            MessageBox.Show(this, $"폴더 복사 실패: {name}\n{exDir.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+
+                        continue;
+                    }
+
+                    // 파일 복사 처리
+                    try
+                    {
+                        // 대상 파일이 존재하고 대상이 더 최신인 경우 사용자에게 확인 (파일 단위)
+                        if (File.Exists(dstPath))
+                        {
+                            var sInfo = new FileInfo(srcPath);
+                            var dInfo = new FileInfo(dstPath);
+                            if (dInfo.LastWriteTime > sInfo.LastWriteTime)
+                            {
+                                string msg = "대상에 동일한 이름의 파일이 이미 있습니다.\r\n대상 파일이 더 신규 파일입니다. 덮어쓰시겠습니까?\r\n\r\n원본: " + srcPath + "\r\n대상: " + dstPath;
+                                var dr = MessageBox.Show(this, msg, "덮어쓰기 확인", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                                if (dr != DialogResult.Yes)
+                                {
+                                    continue; // 건너뜀
+                                }
+                            }
+                        }
+
+                        File.Copy(srcPath, dstPath, true); // 덮어쓰기 허용
                         copied++;
                     }
                     catch (Exception exFile)
@@ -155,6 +182,7 @@ namespace FileCompare
                 PopulateListView(lvwLeftDir, txtLeftDir.Text);
                 PopulateListView(lvwrightDir, txtRightDir.Text);
 
+                // 요약 알림 (필요하면 표시)
                 
             }
             catch (Exception ex)
@@ -167,7 +195,7 @@ namespace FileCompare
         {
             try
             {
-                // 오른쪽 -> 왼쪽으로 선택한 파일 복사
+                // 오른쪽 -> 왼쪽으로 선택한 파일/폴더 복사
                 if (string.IsNullOrWhiteSpace(txtRightDir.Text) || !Directory.Exists(txtRightDir.Text))
                 {
                     MessageBox.Show(this, "오른쪽 폴더가 선택되어 있지 않습니다.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -182,7 +210,7 @@ namespace FileCompare
                 var selected = lvwrightDir.SelectedItems;
                 if (selected.Count == 0)
                 {
-                    MessageBox.Show(this, "복사할 파일을 선택하세요.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(this, "복사할 항목을 선택하세요.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
@@ -191,36 +219,60 @@ namespace FileCompare
                 foreach (ListViewItem it in selected)
                 {
                     string name = it.Text;
-                    // 디렉터리 항목이면 건너뜀
+                    string srcPath = Path.Combine(txtRightDir.Text, name);
+                    string dstPath = Path.Combine(txtLeftDir.Text, name);
+
+                    // 폴더 단위 처리
                     if (it.SubItems.Count > 1 && it.SubItems[1].Text == "<DIR>")
                     {
-                        skippedDir++;
-                        continue;
-                    }
-
-                    string src = Path.Combine(txtRightDir.Text, name);
-                    string dst = Path.Combine(txtLeftDir.Text, name);
-
-                    try
-                    {
-                        // 대상 파일이 존재하고 대상(왼쪽)이 더 최신인 경우 사용자에게 확인
-                        if (File.Exists(dst))
+                        if (Directory.Exists(dstPath))
                         {
-                            var sInfo = new FileInfo(src);
-                            var dInfo = new FileInfo(dst);
-                            if (dInfo.LastWriteTime > sInfo.LastWriteTime)
+                            var sDir = new DirectoryInfo(srcPath);
+                            var dDir = new DirectoryInfo(dstPath);
+                            if (dDir.LastWriteTime > sDir.LastWriteTime)
                             {
-                                string msg = "대상에 동일한 이름의 파일이 이미 있습니다.\r\n대상 파일이 더 신규 파일입니다. 덮어쓰시겠습니까?\r\n\r\n원본: " + src + "\r\n대상: " + dst;
+                                string msg = "대상에 동일한 이름의 파일이 이미 있습니다.\r\n대상 파일이 더 신규 파일입니다. 덮어쓰시겠습니까?\r\n\r\n원본: " + srcPath + "\r\n대상: " + dstPath;
                                 var dr = MessageBox.Show(this, msg, "덮어쓰기 확인", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                                 if (dr != DialogResult.Yes)
                                 {
-                                    // 덮어쓰지 않음 -> 건너뜀
-                                    continue;
+                                    skippedDir++;
+                                    continue; // 건너뜀
                                 }
                             }
                         }
 
-                        File.Copy(src, dst, true); // 덮어쓰기 허용
+                        try
+                        {
+                            CopyDirectoryRecursive(srcPath, dstPath);
+                            copied++;
+                        }
+                        catch (Exception exDir)
+                        {
+                            MessageBox.Show(this, $"폴더 복사 실패: {name}\n{exDir.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+
+                        continue;
+                    }
+
+                    // 파일 단위 처리
+                    try
+                    {
+                        if (File.Exists(dstPath))
+                        {
+                            var sInfo = new FileInfo(srcPath);
+                            var dInfo = new FileInfo(dstPath);
+                            if (dInfo.LastWriteTime > sInfo.LastWriteTime)
+                            {
+                                string msg = "대상에 동일한 이름의 파일이 이미 있습니다.\r\n대상 파일이 더 신규 파일입니다. 덮어쓰시겠습니까?\r\n\r\n원본: " + srcPath + "\r\n대상: " + dstPath;
+                                var dr = MessageBox.Show(this, msg, "덮어쓰기 확인", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                                if (dr != DialogResult.Yes)
+                                {
+                                    continue; // 건너뜀
+                                }
+                            }
+                        }
+
+                        File.Copy(srcPath, dstPath, true); // 덮어쓰기 허용
                         copied++;
                     }
                     catch (Exception exFile)
@@ -233,11 +285,47 @@ namespace FileCompare
                 PopulateListView(lvwLeftDir, txtLeftDir.Text);
                 PopulateListView(lvwrightDir, txtRightDir.Text);
 
-               
+                // 요약 메시지 제거: 더 이상 복사 요약을 표시하지 않음
             }
             catch (Exception ex)
             {
                 Console.WriteLine("오류 발생: " + ex.Message);
+            }
+        }
+
+        // 하위 폴더를 재귀적으로 복사 (덮어쓰기 허용)
+        private void CopyDirectoryRecursive(string sourceDirName, string destDirName)
+        {
+            var sourceDir = new DirectoryInfo(sourceDirName);
+            if (!sourceDir.Exists)
+                throw new DirectoryNotFoundException("Source directory not found: " + sourceDirName);
+
+            // 대상 디렉터리 생성
+            Directory.CreateDirectory(destDirName);
+
+            // 파일 복사
+            foreach (var file in sourceDir.GetFiles())
+            {
+                string targetFilePath = Path.Combine(destDirName, file.Name);
+                // 파일이 존재하더라도 폴더 단위에서 이미 사용자가 허용했으므로 덮어쓰기
+                file.CopyTo(targetFilePath, true);
+            }
+
+            // 하위 디렉터리 재귀 복사
+            foreach (var subdir in sourceDir.GetDirectories())
+            {
+                string targetSubDir = Path.Combine(destDirName, subdir.Name);
+                CopyDirectoryRecursive(subdir.FullName, targetSubDir);
+            }
+
+            // 복사 후 대상 디렉터리의 최종 수정 시간은 소스 디렉터리의 수정 시간으로 맞춰둠
+            try
+            {
+                Directory.SetLastWriteTime(destDirName, sourceDir.LastWriteTime);
+            }
+            catch
+            {
+                // 무시
             }
         }
 
@@ -254,6 +342,48 @@ namespace FileCompare
                     var item = new ListViewItem(d.Name);
                     item.SubItems.Add("<DIR>");
                     item.SubItems.Add(d.LastWriteTime.ToString("g"));
+
+                    // 비교 대상 폴더 결정 (반대편)
+                    string otherFolder = null;
+                    if (lv == lvwLeftDir)
+                    {
+                        otherFolder = txtRightDir.Text;
+                    }
+                    else if (lv == lvwrightDir)
+                    {
+                        otherFolder = txtLeftDir.Text;
+                    }
+
+                    // 폴더(하위폴더)를 하나의 항목으로 처리하여 색상 결정
+                    if (!string.IsNullOrWhiteSpace(otherFolder) && Directory.Exists(otherFolder))
+                    {
+                        var otherPath = Path.Combine(otherFolder, d.Name);
+                        if (Directory.Exists(otherPath))
+                        {
+                            var od = new DirectoryInfo(otherPath);
+                            if (d.LastWriteTime == od.LastWriteTime)
+                            {
+                                item.ForeColor = Color.Black; // 동일
+                            }
+                            else if (d.LastWriteTime > od.LastWriteTime)
+                            {
+                                item.ForeColor = Color.Red; // 이쪽이 더 최신
+                            }
+                            else
+                            {
+                                item.ForeColor = Color.Gray; // 이쪽이 더 오래됨
+                            }
+                        }
+                        else
+                        {
+                            item.ForeColor = Color.Purple; // 반대편에 없음
+                        }
+                    }
+                    else
+                    {
+                        item.ForeColor = Color.Purple; // 반대편이 비어있음
+                    }
+
                     lv.Items.Add(item);
                 }
                 // 파일 추가
@@ -261,15 +391,15 @@ namespace FileCompare
                 .Select(p => new FileInfo(p))
                 .OrderBy(f => f.Name);
 
-                // 비교 대상 폴더 결정 (반대편)
-                string otherFolder = null;
+                // 비교 대상 폴더 결정 (반대편) - reused
+                string otherFolderForFiles = null;
                 if (lv == lvwLeftDir)
                 {
-                    otherFolder = txtRightDir.Text;
+                    otherFolderForFiles = txtRightDir.Text;
                 }
                 else if (lv == lvwrightDir)
                 {
-                    otherFolder = txtLeftDir.Text;
+                    otherFolderForFiles = txtLeftDir.Text;
                 }
 
                 foreach (var f in files)
@@ -280,9 +410,9 @@ namespace FileCompare
 
                     // 상태 결정 및 색상 적용
                     FileInfo rf = null;
-                    if (!string.IsNullOrWhiteSpace(otherFolder) && Directory.Exists(otherFolder))
+                    if (!string.IsNullOrWhiteSpace(otherFolderForFiles) && Directory.Exists(otherFolderForFiles))
                     {
-                        var otherPath = Path.Combine(otherFolder, f.Name);
+                        var otherPath = Path.Combine(otherFolderForFiles, f.Name);
                         if (File.Exists(otherPath))
                         {
                             rf = new FileInfo(otherPath);
@@ -310,7 +440,6 @@ namespace FileCompare
                         else
                         {
                             // 파일 이름은 같지만 크기가 다르면 시간/내용이 다른 것으로 간주
-                            // 시간 기준으로 더 최신/오래된 색상을 적용하거나 회색으로 표시할 수 있음.
                             if (f.LastWriteTime > rf.LastWriteTime)
                             {
                                 item.ForeColor = Color.Red;
@@ -353,6 +482,6 @@ namespace FileCompare
             }
         }
 
-        
+
     }
 }
