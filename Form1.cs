@@ -87,12 +87,158 @@ namespace FileCompare
 
         private void btnCopyFromLeft_Click(object sender, EventArgs e)
         {
+            try
+            {
+                // 왼쪽 -> 오른쪽으로 선택한 파일 복사
+                if (string.IsNullOrWhiteSpace(txtLeftDir.Text) || !Directory.Exists(txtLeftDir.Text))
+                {
+                    MessageBox.Show(this, "왼쪽 폴더가 선택되어 있지 않습니다.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                if (string.IsNullOrWhiteSpace(txtRightDir.Text) || !Directory.Exists(txtRightDir.Text))
+                {
+                    MessageBox.Show(this, "오른쪽 폴더가 선택되어 있지 않습니다.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
 
+                var selected = lvwLeftDir.SelectedItems;
+                if (selected.Count == 0)
+                {
+                    MessageBox.Show(this, "복사할 파일을 선택하세요.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                int copied = 0;
+                int skippedDir = 0;
+                foreach (ListViewItem it in selected)
+                {
+                    string name = it.Text;
+                    // 디렉터리 항목이면 건너뜀 (디렉터리 복사는 미지원)
+                    if (it.SubItems.Count > 1 && it.SubItems[1].Text == "<DIR>")
+                    {
+                        skippedDir++;
+                        continue;
+                    }
+
+                    string src = Path.Combine(txtLeftDir.Text, name);
+                    string dst = Path.Combine(txtRightDir.Text, name);
+
+                    try
+                    {
+                        // 대상 파일이 존재하고 대상이 더 최신인 경우 사용자에게 확인
+                        if (File.Exists(dst))
+                        {
+                            var sInfo = new FileInfo(src);
+                            var dInfo = new FileInfo(dst);
+                            if (dInfo.LastWriteTime > sInfo.LastWriteTime)
+                            {
+                                string msg = "대상에 동일한 이름의 파일이 이미 있습니다.\r\n대상 파일이 더 신규 파일입니다. 덮어쓰시겠습니까?\r\n\r\n원본: " + src + "\r\n대상: " + dst;
+                                var dr = MessageBox.Show(this, msg, "덮어쓰기 확인", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                                if (dr != DialogResult.Yes)
+                                {
+                                    // 덮어쓰지 않음 -> 건너뜀
+                                    continue;
+                                }
+                            }
+                        }
+
+                        File.Copy(src, dst, true); // 덮어쓰기 허용
+                        copied++;
+                    }
+                    catch (Exception exFile)
+                    {
+                        MessageBox.Show(this, $"파일 복사 실패: {name}\n{exFile.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+
+                // 복사 후 양쪽 리스트뷰 갱신(일관된 색상 표시를 위해)
+                PopulateListView(lvwLeftDir, txtLeftDir.Text);
+                PopulateListView(lvwrightDir, txtRightDir.Text);
+
+                
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("오류 발생: " + ex.Message);
+            }
         }
 
         private void btnCopyFromRight_Click(object sender, EventArgs e)
         {
+            try
+            {
+                // 오른쪽 -> 왼쪽으로 선택한 파일 복사
+                if (string.IsNullOrWhiteSpace(txtRightDir.Text) || !Directory.Exists(txtRightDir.Text))
+                {
+                    MessageBox.Show(this, "오른쪽 폴더가 선택되어 있지 않습니다.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                if (string.IsNullOrWhiteSpace(txtLeftDir.Text) || !Directory.Exists(txtLeftDir.Text))
+                {
+                    MessageBox.Show(this, "왼쪽 폴더가 선택되어 있지 않습니다.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
 
+                var selected = lvwrightDir.SelectedItems;
+                if (selected.Count == 0)
+                {
+                    MessageBox.Show(this, "복사할 파일을 선택하세요.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                int copied = 0;
+                int skippedDir = 0;
+                foreach (ListViewItem it in selected)
+                {
+                    string name = it.Text;
+                    // 디렉터리 항목이면 건너뜀
+                    if (it.SubItems.Count > 1 && it.SubItems[1].Text == "<DIR>")
+                    {
+                        skippedDir++;
+                        continue;
+                    }
+
+                    string src = Path.Combine(txtRightDir.Text, name);
+                    string dst = Path.Combine(txtLeftDir.Text, name);
+
+                    try
+                    {
+                        // 대상 파일이 존재하고 대상(왼쪽)이 더 최신인 경우 사용자에게 확인
+                        if (File.Exists(dst))
+                        {
+                            var sInfo = new FileInfo(src);
+                            var dInfo = new FileInfo(dst);
+                            if (dInfo.LastWriteTime > sInfo.LastWriteTime)
+                            {
+                                string msg = "대상에 동일한 이름의 파일이 이미 있습니다.\r\n대상 파일이 더 신규 파일입니다. 덮어쓰시겠습니까?\r\n\r\n원본: " + src + "\r\n대상: " + dst;
+                                var dr = MessageBox.Show(this, msg, "덮어쓰기 확인", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                                if (dr != DialogResult.Yes)
+                                {
+                                    // 덮어쓰지 않음 -> 건너뜀
+                                    continue;
+                                }
+                            }
+                        }
+
+                        File.Copy(src, dst, true); // 덮어쓰기 허용
+                        copied++;
+                    }
+                    catch (Exception exFile)
+                    {
+                        MessageBox.Show(this, $"파일 복사 실패: {name}\n{exFile.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+
+                // 복사 후 양쪽 리스트뷰 갱신
+                PopulateListView(lvwLeftDir, txtLeftDir.Text);
+                PopulateListView(lvwrightDir, txtRightDir.Text);
+
+               
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("오류 발생: " + ex.Message);
+            }
         }
 
         private void PopulateListView(ListView lv, string folderPath)
